@@ -1,18 +1,54 @@
-module JuliaQubit
+module JuliaQubit2
 
 using PyCall
 using TensorOperations
 
-export apply_all
+export JuliaQubit
 
-    function generate_wires_map(wires_class)
-        return Dict(zip(wires_class, 1:wires_class.__len__() ))
+qml = pyimport("pennylane")
+devices_mod = pyimport("pennylane.devices")
+
+@pydef mutable struct JuliaQubit <: devices_mod.DefaultQubit
+
+    name = "Julia Qubit PennyLane plugin"
+    short_name = "julia.qubit"
+    pennylane_requires = "dev?"
+    version = "0.0.1"
+    author = "Christina Lee"
+
+    operations = [
+        "PauliX",
+        "PauliY",
+        "PauliZ",
+        "Hadamard",
+        "S",
+        "T",
+        "CNOT",
+        "SWAP",
+        "CSWAP",
+        "Toffoli",
+        "CZ",
+        "PhaseShift",
+        "RX",
+        "RY",
+        "RZ",
+        "Rot",
+        "CRX",
+        "CRY",
+        "CRZ",
+        "CRot"
+    ]
+
+    observables = ["PauliX", "PauliY", "PauliZ", "Hadamard", "Identity"]
+
+    function __init__(self, wires, args...; shots=None, cache=0)
+            qml.devices.DefaultQubit.__init__(self, wires, shots=shots, cache=cache)
     end
 
-    function apply(state, op, wires_map, n_wires)
-        dev_wires =  [wires_map[w] for w in op.wires]
+    function apply_operation(self, state, op)
+        dev_wires =  [self.wires_map[w] for w in op.wires]
         
-        state_indices = -collect(1:n_wires)
+        state_indices = -collect(1:self.num_wires)
         op_indices = cat(zeros(Int,length(op.wires)), (1:length(op.wires)), dims=1)
 
         for (i, w) in enumerate(reverse(dev_wires))
@@ -25,18 +61,20 @@ export apply_all
         return ncon((matr, state), (op_indices, state_indices))
     end
 
-    function apply_all(wires_class, operations)
+    function apply(self, operations, args...; rotations=None, kwargs...)
 
-        n_wires = wires_class.__len__()
-        state = zeros(Complex{Float32}, repeat([2], n_wires)...)
-        state[1] = 1
+        self._state = zeros(Complex{Float64}, repeat([2], self.num_wires)...)
+        self._state[1] = 1.0
 
-        wires_map = generate_wires_map(wires_class)
+        self.wires_map = Dict(zip(self._wires, 1:self.num_wires))
         
         for op in operations
-            state = apply(state, op, wires_map, n_wires)
+            self._state = self.apply_operation(self._state, op)
         end
-        return state
+
+        self._prerotated_state = self._state
     end
+
+end
 
 end
