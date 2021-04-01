@@ -1,5 +1,10 @@
-from pennylane import QubitDevice
+from pennylane.devices import DefaultQubit
+import julia
 
+jl = julia.Julia(compiled_modules=False)
+
+from julia import Main
+Main.include('JuliaQubit.jl')
 
 class JuliaQubit(DefaultQubit):
     """ PennyLane Julia deivce.
@@ -40,34 +45,37 @@ class JuliaQubit(DefaultQubit):
         "CRot"
     }
 
-    observables = {}
+    observables = {"PauliX", "PauliY", "PauliZ", "Hadamard", "Identity"}
 
     def __init__(self, wires, *, shots=1000, cache=0):
         super().__init__(wires=wires, shots=shots)
-
-        self.samples
         
     @classmethod
     def capabilities(cls):
-        capabilities = super().capabilities.copy()
+        capabilities = super().capabilities().copy()
         capabilities.update(
             model="qubit",
-            supports_finite_shots=False,
             supports_reversible_diff=False,
-            supports_inversion_operations=True,
+            supports_inverse_operations=False,
             supports_analytic_computation=True,
             returns_state=True,
-            returns_probs=True
         )
+        capabilities.pop("passthru_devices", None)
+        return capabilities
 
-    def apply(self, operations, **kwargs):
+    def apply(self, operations, rotations=None,**kwargs):
         """ creates self.state and modifies it
         Args:
             operations (list[~.Operation]): operation to apply to the device
         """
-        pass
+        self._state = Main.JuliaQubit.apply_all(self._wires, operations)
 
-    def analytic_probability(self, wires=None):
+        # store the pre-rotated state
+        self._pre_rotated_state = self._state
+
+        #Main.JuliaQubit.apply(self._state, )
+
+    #def analytic_probability(self, wires=None):
         """ returns marginal probability
 
         Args:
@@ -77,4 +85,4 @@ class JuliaQubit(DefaultQubit):
         Returns:
             List[float]: list of the probabilities
         """
-        pass
+    #   pass
